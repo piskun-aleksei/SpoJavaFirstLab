@@ -5,9 +5,6 @@ public class Starter {
     public static void main(String... args){
         boolean choiceIsCorrect = false;
         BasicConnector connector = null;
-        СокетХуёкет маккуин = new СокетХуёкет(1337, "ЕЕЕЕЕ БАТЬ МОЙ ХУЙ");
-        System.out.println(маккуин.гдеСкорость());
-        System.out.println(маккуин.аеКЧАУ());
         System.out.println("Choose your destiny: 1 for server, 2 for client ");
         while(!choiceIsCorrect) {
             int i = Integer.parseInt(new Scanner(System.in).nextLine());

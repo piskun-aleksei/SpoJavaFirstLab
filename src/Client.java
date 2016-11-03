@@ -1,8 +1,12 @@
 import java.io.*;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousFileChannel;
+import java.nio.channels.CompletionHandler;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Arrays;
 
 
@@ -130,25 +134,33 @@ public class Client implements BasicConnector {
     }
 
     private boolean prepareDownload(String filename, String command) throws IOException {
-        File file = new File("downloaded_" + filename);
+        String fileName = new String("downloaded_" + filename).trim();
+        File file = new File(fileName);
+        AsynchronousFileChannel fileChannel = AsynchronousFileChannel.open(
+                Paths.get(fileName), StandardOpenOption.READ,
+                StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+
+
         if (file.exists()) {
             if (!checkForFile(command)) {
                 return false;
             }
-            download(file, file.length());
+            download(fileChannel, file, file.length());
         } else {
             if (!checkForFile(command)) {
                 return false;
             }
-            download(file, 0);
+            download(fileChannel, file, 0);
         }
         return true;
     }
 
-    private void download(File file, long offset) throws IOException {
+    private void download(AsynchronousFileChannel afc, File file, long offset) throws IOException {
         if (!file.exists()) {
             file.createNewFile();
         }
+        long timeStart = System.currentTimeMillis();
+
         while (true) {
             send(String.valueOf(offset));
             byte[] buffer = new byte[socket_buf];
@@ -157,11 +169,19 @@ public class Client implements BasicConnector {
             if (check.startsWith("FileEnding")) {
                 System.out.println("Sever: File downloaded");
                 send("FileSaved");
+                long time = System.currentTimeMillis() - timeStart;
+                Long speed = offset / time;
+                System.out.println("Speed: " + speed + " kb/s");
+                afc.close();
                 break;
             }
-            offset += count;
+
             System.out.println("Sever: offset: " + offset);
-            Files.write(Paths.get(file.getPath().trim()), Arrays.copyOfRange(buffer, 0, count), StandardOpenOption.APPEND);
+            byte[] tempBuf = new byte[count];
+            ByteBuffer.wrap(buffer).get(tempBuf, 0, count);
+            afc.write(ByteBuffer.wrap(tempBuf), offset);
+            offset += count;
+            //Files.write(Paths.get(file.getPath().trim()), Arrays.copyOfRange(buffer, 0, count), StandardOpenOption.APPEND);
         }
     }
 
