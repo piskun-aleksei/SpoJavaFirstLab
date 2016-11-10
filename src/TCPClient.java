@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 
-public class Client implements BasicConnector {
+public class TCPClient implements BasicConnector {
 
     private Socket connection;
     private InputStream input;

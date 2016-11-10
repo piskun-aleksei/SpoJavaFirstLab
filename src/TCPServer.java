@@ -11,7 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 
 
-public class Server implements BasicConnector {
+public class TCPServer implements BasicConnector {
     private ServerSocket server;
     private Socket connection;
     private InputStream input;
@@ -26,7 +26,7 @@ public class Server implements BasicConnector {
             server = new ServerSocket(6790);
             startTime = System.currentTimeMillis();
             if (server != null) {
-                System.out.println("Server is up");
+                System.out.println("TCPServer is up");
                 while (true) {
                     connection = server.accept();
                     input = connection.getInputStream();
@@ -49,7 +49,7 @@ public class Server implements BasicConnector {
                 if (line == null) {
                     break;
                 }
-                System.out.println("Client: " + line);
+                System.out.println("TCPClient: " + line);
                 process(line);
             }
         } catch (IOException ignored) {
@@ -89,9 +89,9 @@ public class Server implements BasicConnector {
         Long currentTime = System.currentTimeMillis() - startTime;
         Long currentTimeSec = currentTime / 1000;
         if (currentTimeSec < 60) {
-            result = "Server is up for " + currentTimeSec.toString() + " seconds";
+            result = "TCPServer is up for " + currentTimeSec.toString() + " seconds";
         } else {
-            result = "Server is up for " + (int) (currentTimeSec / 60) + " minutes and " +
+            result = "TCPServer is up for " + (int) (currentTimeSec / 60) + " minutes and " +
                     (int) (currentTimeSec % 60) + " seconds";
         }
         send(result);
@@ -132,7 +132,7 @@ public class Server implements BasicConnector {
             byte[] buffer = new byte[socket_buf];
             int count = input.read(buffer);
             if (new String(buffer).startsWith("FileEnding")) {
-                System.out.println(connection.getRemoteSocketAddress() + "Client: eof");
+                System.out.println(connection.getRemoteSocketAddress() + "TCPClient: eof");
                 if (serverFile != null) {
                     String desiredFileIP = clientAddress.substring(0, clientAddress.indexOf(":"));
                     String currentClientIP = connection.getRemoteSocketAddress().toString()
@@ -147,7 +147,7 @@ public class Server implements BasicConnector {
                 }
             }
             offset += count;
-            System.out.println("Client: offset: " + offset);
+            System.out.println("TCPClient: offset: " + offset);
             Files.write(Paths.get(file.getPath().trim()), Arrays.copyOfRange(buffer, 0, count), StandardOpenOption.APPEND);
         }
     }
@@ -168,7 +168,7 @@ public class Server implements BasicConnector {
                 throw new IOException();
             }
             if (lineFromClient.trim().equals("FileSaved")) {
-                System.out.println("Client: " + lineFromClient);
+                System.out.println("TCPClient: " + lineFromClient);
                 send("File sent");
                 break;
             }
