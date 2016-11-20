@@ -2,12 +2,9 @@ import java.io.*;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
-import java.nio.channels.CompletionHandler;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 
 
 public class TCPClient implements BasicConnector {
@@ -27,9 +24,9 @@ public class TCPClient implements BasicConnector {
 
     private void setupConnection() {
         try {
-            System.out.println("Enter Server's IP address: ");
+            System.out.println("Enter TCPServer's IP address: ");
             String ip = user.readLine();
-            System.out.println("Enter Server's Port number: ");
+            System.out.println("Enter TCPServer's Port number: ");
             String portLine = user.readLine();
             if (portLine.equals("")) {
                 return;
@@ -43,6 +40,7 @@ public class TCPClient implements BasicConnector {
     private void connect(String ip, Integer port) {
         try {
             connection = new Socket(ip, port);
+            connection.setOOBInline(true);
             input = connection.getInputStream();
             output = connection.getOutputStream();
             generateRequests();
@@ -140,7 +138,6 @@ public class TCPClient implements BasicConnector {
                 Paths.get(fileName), StandardOpenOption.READ,
                 StandardOpenOption.WRITE, StandardOpenOption.CREATE);
 
-
         if (file.exists()) {
             if (!checkForFile(command)) {
                 return false;
@@ -166,7 +163,7 @@ public class TCPClient implements BasicConnector {
             byte[] buffer = new byte[socket_buf];
             int count = input.read(buffer);
             String check = new String(buffer);
-            if (check.startsWith("FileEnding")) {
+            if (check.contains("FileEnding")) {
                 System.out.println("Sever: File downloaded");
                 send("FileSaved");
                 long time = System.currentTimeMillis() - timeStart;
@@ -175,13 +172,23 @@ public class TCPClient implements BasicConnector {
                 afc.close();
                 break;
             }
-
-            System.out.println("Sever: offset: " + offset);
-            byte[] tempBuf = new byte[count];
-            ByteBuffer.wrap(buffer).get(tempBuf, 0, count);
+            ArrayList<Byte> bytes = new ArrayList<>();
+            int j = 0;
+            for (int i=0; i<count; i++){
+                if(buffer[i] == -128 && i+3 <= count){
+                    if(buffer[i+1]== -127 && buffer[i+2] == 127 && buffer[i+3] == 126)
+                        System.out.println("Sever: offset: " + offset);
+                }
+                else {
+                    bytes.add(buffer[i]);
+                }
+            }
+            byte[] tempBuf = new byte[bytes.size()];
+            for (int i = 0; i<bytes.size();i++){
+                tempBuf[i] = bytes.get(i);
+            }
             afc.write(ByteBuffer.wrap(tempBuf), offset);
             offset += count;
-            //Files.write(Paths.get(file.getPath().trim()), Arrays.copyOfRange(buffer, 0, count), StandardOpenOption.APPEND);
         }
     }
 

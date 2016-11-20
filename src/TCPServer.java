@@ -153,7 +153,7 @@ public class TCPServer implements BasicConnector {
     }
 
     private void download(String filename) throws IOException {
-        File file = new File(filename);
+        File file = new File(filename.trim());
         if (!file.exists()) {
             send("No such file");
             return;
@@ -162,6 +162,7 @@ public class TCPServer implements BasicConnector {
         BufferedReader inputReader = new BufferedReader(new InputStreamReader(input));
         RandomAccessFile fileReader;
         fileReader = new RandomAccessFile(file, "r");
+        int urgent = 0;
         while (true) {
             String lineFromClient = inputReader.readLine();
             if (lineFromClient == null) {
@@ -176,6 +177,15 @@ public class TCPServer implements BasicConnector {
             fileReader.seek(uploadedBytes);
             byte[] bytes = new byte[socket_buf];
             int countBytes = fileReader.read(bytes);
+
+            urgent++;
+            if(urgent == 100){
+                urgent = 0;
+                connection.sendUrgentData(-128);
+                connection.sendUrgentData(-127);
+                connection.sendUrgentData(127);
+                connection.sendUrgentData(126);
+            }
             if (countBytes > 0) {
                 send(bytes, countBytes);
             } else {
