@@ -101,6 +101,7 @@ public class NewUDPClient implements BasicConnector {
             file.createNewFile();
         }
         long timeStart = System.currentTimeMillis();
+
         while (true) {
             try {
                 send(String.valueOf(offset));
@@ -157,14 +158,14 @@ public class NewUDPClient implements BasicConnector {
     }
 
     private String receiveString() throws IOException {
-        byte[] buffer = new byte[32 * 1024];
+        byte[] buffer = new byte[socket_buf];
         DatagramPacket incoming = new DatagramPacket(buffer, buffer.length);
         serverConnection.receive(incoming);
         return new String(incoming.getData(), 0, incoming.getLength());
     }
 
     private DatagramPacket receiveData() throws IOException {
-        byte[] buffer = new byte[32 * 1024];
+        byte[] buffer = new byte[socket_buf];
         DatagramPacket incoming = new DatagramPacket(buffer, buffer.length);
         serverConnection.receive(incoming);
         return incoming;

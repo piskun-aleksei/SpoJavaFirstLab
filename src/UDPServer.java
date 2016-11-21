@@ -1,4 +1,6 @@
-<<<<<<< HEAD
+import java.io.IOException;
+
+
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -255,10 +257,3 @@ public class UDPServer implements BasicConnector {
         System.out.println(server.getRemoteSocketAddress() + " disconnected");
     }
 }
-=======
-/**
- * Created by Aliaksei_Piskun1 on 10-Nov-16.
- */
-public class UDPServer {
-}
->>>>>>> e40dc4954db7ea8f311d4c63af89f64bd3465ea0

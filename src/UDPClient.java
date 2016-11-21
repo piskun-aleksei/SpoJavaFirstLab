@@ -1,4 +1,6 @@
-<<<<<<< HEAD
+import java.io.IOException;
+
+
 import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -61,11 +63,11 @@ public class UDPClient implements BasicConnector {
         try {
 
             while (true) {
-                Arrays.fill(buffer, (byte)0);
+                Arrays.fill(buffer, (byte) 0);
                 connection.receive(incomingPacket);
                 String lineFromServer = new String(buffer);
 
-                Arrays.fill(buffer, (byte)0);
+                Arrays.fill(buffer, (byte) 0);
                 if (lineFromServer == null) {
                     throw new IOException();
                 }
@@ -187,17 +189,15 @@ public class UDPClient implements BasicConnector {
                 System.out.println("Sever: offset: " + offset);
                 byte[] tempBuf = new byte[getLastIndex(buffer) + 1];
                 ByteBuffer.wrap(buffer).get(tempBuf, 0, getLastIndex(buffer) + 1);
-                if(tempBuf[getLastIndex(buffer)] == '\00'){
+                if (tempBuf[getLastIndex(buffer)] == '\00') {
                     byte[] tempBufZero = new byte[getLastIndex(buffer)];
                     ByteBuffer.wrap(buffer).get(tempBufZero, 0, getLastIndex(buffer));
                     afc.write(ByteBuffer.wrap(tempBufZero), offset);
-                }
-                else {
+                } else {
                     afc.write(ByteBuffer.wrap(tempBuf), offset);
                 }
                 offset += count;
-            }
-            catch (SocketTimeoutException e){
+            } catch (SocketTimeoutException e) {
                 offset -= buffer.length;
                 send(String.valueOf(offset));
                 continue;
@@ -224,33 +224,27 @@ public class UDPClient implements BasicConnector {
         System.out.println(connection.getRemoteSocketAddress() + " disconnected");
     }
 
-    private int getLastIndex(byte[] bytes){
+    private int getLastIndex(byte[] bytes) {
         int pos = 0;
-        for(int i = 0; i < bytes.length; i++){
-            if(bytes[i] == 0){
-                for(int j = i; j < bytes.length; j ++){
-                    if(bytes[j] != 0){
+        for (int i = 0; i < bytes.length; i++) {
+            if (bytes[i] == 0) {
+                for (int j = i; j < bytes.length; j++) {
+                    if (bytes[j] != 0) {
                         break;
                     }
-                    if(j  == bytes.length - 1){
+                    if (j == bytes.length - 1) {
                         pos = i;
                         break;
                     }
                 }
-                if(pos != 0){
+                if (pos != 0) {
                     break;
                 }
             }
-            if(i == bytes.length - 1){
+            if (i == bytes.length - 1) {
                 pos = bytes.length - 1;
             }
         }
         return pos;
     }
-=======
-/**
- * Created by Aliaksei_Piskun1 on 10-Nov-16.
- */
-public class UDPClient {
->>>>>>> e40dc4954db7ea8f311d4c63af89f64bd3465ea0
 }

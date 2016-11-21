@@ -1,9 +1,9 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.SocketTimeoutException;
+import java.util.Arrays;
 
 /**
  * Created by Brotorias on 20.11.2016.
@@ -26,12 +26,13 @@ public class NewUDPServer implements BasicConnector {
                         String command = delimiterIndex == -1 ? line.toLowerCase()
                                 : line.toLowerCase().substring(0, delimiterIndex).trim();
                         String argument = delimiterIndex == -1 ? "" : line.substring(delimiterIndex).trim();
+                        System.out.printf("");
                         switch (command) {
                             case "echo":
                                 send(incoming.getAddress(), incoming.getPort(), argument);
                                 break;
                             case "download":
-                                //download(incoming.getAddress(), incoming.getPort(),argument);
+                                download(incoming.getAddress(), incoming.getPort(), argument);
                                 break;
                             default:
                                 send(incoming.getAddress(), incoming.getPort(), "Unknown command: " + command);
@@ -46,6 +47,64 @@ public class NewUDPServer implements BasicConnector {
             e.printStackTrace();
         }
 
+    }
+
+    private void download(String filename) throws IOException, SocketCustomException {
+        File file = new File(filename.trim());
+        if (!file.exists()) {
+            send("No such file");
+            return;
+        }
+        send("File was found");
+        RandomAccessFile fileReader;
+        fileReader = new RandomAccessFile(file, "r");
+        server.setSoTimeout(1000);
+        String lineFromClient = null;
+        int countBytes = 0;
+        while (true) {
+            try {
+                Arrays.fill(buffer, (byte) 0);
+                server.setSoTimeout(5000);
+                try {
+                    server.receive(incomingPacket);
+                }catch (SocketTimeoutException e){
+                    server.setSoTimeout(0);
+                    throw  new SocketCustomException();
+                }
+                server.setSoTimeout(0);
+                lineFromClient = new String(buffer);
+                if (lineFromClient == null) {
+                    throw new IOException();
+                }
+                if (lineFromClient.trim().equals("FileSaved")) {
+                    System.out.println("UDPClient: " + lineFromClient);
+                    send("File sent");
+                    break;
+                }
+
+                long uploadedBytes = Long.parseLong(lineFromClient.trim());
+                fileReader.seek(uploadedBytes);
+                countBytes = fileReader.read(buffer);
+                if (countBytes > 0) {
+                    send(buffer, countBytes);
+                } else {
+                    send("FileEnding");
+                }
+            }
+            catch(SocketTimeoutException e) {
+                if (lineFromClient.trim().equals("FileSaved")) {
+                    send("File sent");
+                }
+                else if(countBytes > 0){
+                    send(buffer, countBytes);
+                }
+                else {
+                    send("FileEnding");
+                }
+                continue;
+            }
+        }
+        server.setSoTimeout(0);
     }
 
     private void send(InetAddress address, int port, String data) throws IOException {
@@ -67,14 +126,14 @@ public class NewUDPServer implements BasicConnector {
     }
 
     private String receiveString() throws IOException {
-        byte[] buffer = new byte[32 * 1024];
+        byte[] buffer = new byte[socket_buf];
         DatagramPacket incoming = new DatagramPacket(buffer, buffer.length);
         server.receive(incoming);
         return new String(incoming.getData(), 0, incoming.getLength());
     }
 
     private DatagramPacket receiveData() throws IOException {
-        byte[] buffer = new byte[32 * 1024];
+        byte[] buffer = new byte[socket_buf];
         DatagramPacket incoming = new DatagramPacket(buffer, buffer.length);
         server.receive(incoming);
         return incoming;
