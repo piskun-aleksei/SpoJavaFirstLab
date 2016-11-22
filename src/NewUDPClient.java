@@ -170,4 +170,12 @@ public class NewUDPClient implements BasicConnector {
         serverConnection.receive(incoming);
         return incoming;
     }
+
+    private static int fromByteArray(byte[] bytes) {
+        return ByteBuffer.wrap(bytes).getInt();
+    }
+
+    private static byte[] toByteArray(int value) {
+        return  ByteBuffer.allocate(4).putInt(value).array();
+    }
 }

@@ -3,6 +3,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
@@ -11,6 +12,7 @@ import java.util.Arrays;
 public class NewUDPServer implements BasicConnector {
     private DatagramSocket server;
     private BufferedReader user = new BufferedReader(new InputStreamReader(System.in));
+
     @Override
     public void startup() {
         try {
@@ -32,7 +34,7 @@ public class NewUDPServer implements BasicConnector {
                                 send(incoming.getAddress(), incoming.getPort(), argument);
                                 break;
                             case "download":
-                                download(incoming.getAddress(), incoming.getPort(), argument);
+                               // download(incoming.getAddress(), incoming.getPort(), argument);
                                 break;
                             default:
                                 send(incoming.getAddress(), incoming.getPort(), "Unknown command: " + command);
@@ -49,13 +51,28 @@ public class NewUDPServer implements BasicConnector {
 
     }
 
-    private void download(String filename) throws IOException, SocketCustomException {
-        File file = new File(filename.trim());
-        if (!file.exists()) {
-            send("No such file");
-            return;
+    private int fileOnServer(InetAddress address, int port, File file) throws IOException {
+        server.setSoTimeout(60);
+        try {
+            if (!file.exists()) {
+                send(address, port, "No such file");
+                return 0;
+            } else {
+                send(address, port, "File was found");
+            }
+        }catch (SocketTimeoutException e){
+            return -1;
         }
-        send("File was found");
+        return 1;
+    }
+
+    private void download(InetAddress address, int port, String filename) throws IOException, SocketCustomException {
+        File file = new File(filename.trim());
+        int result = -2;
+        while(result != 0 || result != 1){
+            result = fileOnServer(address, port, file);
+        }
+        if(result == 0) return;
         RandomAccessFile fileReader;
         fileReader = new RandomAccessFile(file, "r");
         server.setSoTimeout(1000);
@@ -137,5 +154,13 @@ public class NewUDPServer implements BasicConnector {
         DatagramPacket incoming = new DatagramPacket(buffer, buffer.length);
         server.receive(incoming);
         return incoming;
+    }
+
+    private static int fromByteArray(byte[] bytes) {
+        return ByteBuffer.wrap(bytes).getInt();
+    }
+
+    private static byte[] toByteArray(int value) {
+        return  ByteBuffer.allocate(4).putInt(value).array();
     }
 }
