@@ -34,7 +34,7 @@ public class NewUDPServer implements BasicConnector {
                                 send(incoming.getAddress(), incoming.getPort(), argument);
                                 break;
                             case "download":
-                               // download(incoming.getAddress(), incoming.getPort(), argument);
+                                download(incoming.getAddress(), incoming.getPort(), argument);
                                 break;
                             default:
                                 send(incoming.getAddress(), incoming.getPort(), "Unknown command: " + command);
@@ -52,7 +52,6 @@ public class NewUDPServer implements BasicConnector {
     }
 
     private int fileOnServer(InetAddress address, int port, File file) throws IOException {
-        server.setSoTimeout(60);
         try {
             if (!file.exists()) {
                 send(address, port, "No such file");
@@ -66,7 +65,26 @@ public class NewUDPServer implements BasicConnector {
         return 1;
     }
 
-    private void download(InetAddress address, int port, String filename) throws IOException, SocketCustomException {
+    private int sendPacketsCount(InetAddress address, int port, int packetsCount) throws IOException {
+        try {
+                send(address, port, Integer.toString(packetsCount));
+        }catch (SocketTimeoutException e){
+            return -1;
+        }
+        return 1;
+    }
+
+    private int sendEndingPacket(InetAddress address, int port) throws IOException {
+        try {
+            send(address, port, "ENDFILE");
+            return 0;
+        } catch (SocketTimeoutException e) {
+            return -1;
+        }
+    }
+
+    private void download(InetAddress address, int port, String filename) throws IOException {
+        server.setSoTimeout(600);
         File file = new File(filename.trim());
         int result = -2;
         while(result != 0 || result != 1){
@@ -75,53 +93,29 @@ public class NewUDPServer implements BasicConnector {
         if(result == 0) return;
         RandomAccessFile fileReader;
         fileReader = new RandomAccessFile(file, "r");
-        server.setSoTimeout(1000);
-        String lineFromClient = null;
-        int countBytes = 0;
-        while (true) {
-            try {
-                Arrays.fill(buffer, (byte) 0);
-                server.setSoTimeout(5000);
-                try {
-                    server.receive(incomingPacket);
-                }catch (SocketTimeoutException e){
-                    server.setSoTimeout(0);
-                    throw  new SocketCustomException();
-                }
-                server.setSoTimeout(0);
-                lineFromClient = new String(buffer);
-                if (lineFromClient == null) {
-                    throw new IOException();
-                }
-                if (lineFromClient.trim().equals("FileSaved")) {
-                    System.out.println("UDPClient: " + lineFromClient);
-                    send("File sent");
-                    break;
-                }
-
-                long uploadedBytes = Long.parseLong(lineFromClient.trim());
-                fileReader.seek(uploadedBytes);
-                countBytes = fileReader.read(buffer);
-                if (countBytes > 0) {
-                    send(buffer, countBytes);
-                } else {
-                    send("FileEnding");
-                }
-            }
-            catch(SocketTimeoutException e) {
-                if (lineFromClient.trim().equals("FileSaved")) {
-                    send("File sent");
-                }
-                else if(countBytes > 0){
-                    send(buffer, countBytes);
-                }
-                else {
-                    send("FileEnding");
-                }
-                continue;
-            }
+        Integer countPackets = Math.round(fileReader.length() / socket_buf);
+        if(fileReader.length() % socket_buf != 0)
+            countPackets++;
+        result = -2;
+        while(result != 1){
+            result = sendPacketsCount(address, port, countPackets);
         }
-        server.setSoTimeout(0);
+
+        int currentPacket = 0;
+
+        for (int i = 0; i <countPackets; i++) {
+            fileReader.seek(currentPacket * socket_buf);
+            byte[] bytes = new byte[socket_buf];
+            int countBytes = fileReader.read(bytes);
+            if (countBytes <= 0) break;
+            send(address, port, bytes, countBytes, currentPacket);
+            currentPacket++;
+        }
+
+        while(result != 0){
+            result = sendEndingPacket(address, port);
+        }
+
     }
 
     private void send(InetAddress address, int port, String data) throws IOException {
@@ -131,8 +125,9 @@ public class NewUDPServer implements BasicConnector {
         System.out.print(address + ":" + port + " <<< " + data);
     }
 
-    private void send(InetAddress address, int port, byte[] data, int count) throws IOException {
-        DatagramPacket dp = new DatagramPacket(data, count, address, port);
+    private void send(InetAddress address, int port, byte[] data, int count, Integer packetNum) throws IOException {
+        byte[] tempBuf = concatArrays(data, toByteArray(packetNum));
+        DatagramPacket dp = new DatagramPacket(tempBuf, count + 4, address, port);
         server.send(dp);
     }
 
@@ -162,5 +157,12 @@ public class NewUDPServer implements BasicConnector {
 
     private static byte[] toByteArray(int value) {
         return  ByteBuffer.allocate(4).putInt(value).array();
+    }
+
+    private static byte[] concatArrays(byte[] a, byte[] b){
+        byte[] c = new byte[a.length + b.length];
+        System.arraycopy(a, 0, c, 0, a.length);
+        System.arraycopy(b, 0, c, a.length, b.length);
+        return c;
     }
 }

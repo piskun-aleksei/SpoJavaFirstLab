@@ -10,6 +10,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Arrays;
 
 /**
@@ -20,6 +21,7 @@ public class NewUDPClient implements BasicConnector {
     private InetAddress address;
     private int port;
     private BufferedReader user = new BufferedReader(new InputStreamReader(System.in));
+    private ArrayList<byte[]> bytes = new ArrayList<>();
 
     @Override
     public void startup() {
@@ -71,7 +73,7 @@ public class NewUDPClient implements BasicConnector {
                         System.out.println(receiveString().trim());
                         break;
                     case "download":
-                        //download(incoming.getAddress(), incoming.getPort(),argument);
+                        prepareDownload(argument);
                         break;
                     default:
                         System.out.println(receiveString().trim());
@@ -82,62 +84,48 @@ public class NewUDPClient implements BasicConnector {
 
     }
 
-    private boolean prepareDownload(String filename, String command) throws IOException {
+    private boolean prepareDownload(String filename) throws IOException {
         String fileName = new String("downloaded_" + filename).trim();
-        File file = new File(fileName);
-        AsynchronousFileChannel fileChannel = AsynchronousFileChannel.open(
-                Paths.get(fileName), StandardOpenOption.READ,
-                StandardOpenOption.WRITE, StandardOpenOption.CREATE);
-        if (file.exists()) {
-            download(fileChannel, file, file.length());
-        } else {
-            download(fileChannel, file, 0);
+        String isFileExists = receiveString();
+        System.out.println(isFileExists.trim());
+        if(isFileExists.trim().equals("File was found")) {
+            System.out.println("hui");
+            Integer numPackets = Integer.parseInt(receiveString());
+            System.out.println(numPackets);
+            File file = new File(fileName);
+            AsynchronousFileChannel fileChannel = AsynchronousFileChannel.open(
+                    Paths.get(fileName), StandardOpenOption.READ,
+                    StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+            if (file.exists()) {
+                return false;
+            } else {
+                download(fileChannel, file, numPackets);
+            }
+            return true;
         }
-        return true;
+        return  false;
     }
 
-    private void download(AsynchronousFileChannel afc, File file, long offset) throws IOException {
+    private void download(AsynchronousFileChannel afc, File file, int numPackets) throws IOException {
         if (!file.exists()) {
             file.createNewFile();
         }
         long timeStart = System.currentTimeMillis();
 
         while (true) {
-            try {
-                send(String.valueOf(offset));
-                connection.receive(incomingPacket);
-                int count = buffer.length;
-                String check = new String(buffer);
-                if (check.startsWith("FileEnding")) {
-                    System.out.println("Sever: File downloaded");
-                    send("FileSaved");
-                    long time = System.currentTimeMillis() - timeStart;
-                    Long speed = offset / time;
-                    System.out.println("Speed: " + speed + " kb/s");
-                    afc.close();
-                    break;
-                }
-
-                System.out.println("Sever: offset: " + offset);
-                byte[] tempBuf = new byte[getLastIndex(buffer) + 1];
-                ByteBuffer.wrap(buffer).get(tempBuf, 0, getLastIndex(buffer) + 1);
-                if(tempBuf[getLastIndex(buffer)] == '\00'){
-                    byte[] tempBufZero = new byte[getLastIndex(buffer)];
-                    ByteBuffer.wrap(buffer).get(tempBufZero, 0, getLastIndex(buffer));
-                    afc.write(ByteBuffer.wrap(tempBufZero), offset);
-                }
-                else {
-                    afc.write(ByteBuffer.wrap(tempBuf), offset);
-                }
-                offset += count;
+            DatagramPacket incoming = receiveData();
+            String check = new String(incoming.getData());
+            if(check.trim().equals("ENDFILE")) {
+                afc.close();
+                break;
             }
-            catch (SocketTimeoutException e){
-                offset -= buffer.length;
-                send(String.valueOf(offset));
-                continue;
-            }
+            bytes.add(incoming.getData());
         }
-        connection.setSoTimeout(0);
+        for(int i = 0; i < bytes.size(); i ++){
+            afc.write(ByteBuffer.wrap(Arrays.copyOfRange(bytes.get(i), 0, bytes.get(i).length - 4)),
+                    fromByteArray(Arrays.copyOfRange(bytes.get(i),
+                            bytes.get(i).length - 4, bytes.get(i).length)) * socket_buf);
+        }
     }
     private void sendQuiet(String data) throws IOException {
         data += "\r\n";
