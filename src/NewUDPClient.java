@@ -87,20 +87,20 @@ public class NewUDPClient implements BasicConnector {
     private boolean prepareDownload(String filename) throws IOException {
         String fileName = new String("downloaded_" + filename).trim();
         String isFileExists = receiveString();
-        System.out.println(isFileExists.trim());
+        send("OK");
         if(isFileExists.trim().equals("File was found")) {
-            System.out.println("hui");
-            Integer numPackets = Integer.parseInt(receiveString());
-            System.out.println(numPackets);
+            Integer numPackets = Integer.parseInt(receiveString().trim());
+            send("OK");
             File file = new File(fileName);
             AsynchronousFileChannel fileChannel = AsynchronousFileChannel.open(
                     Paths.get(fileName), StandardOpenOption.READ,
                     StandardOpenOption.WRITE, StandardOpenOption.CREATE);
-            if (file.exists()) {
-                return false;
-            } else {
-                download(fileChannel, file, numPackets);
+            download(fileChannel, file, numPackets);
+            for(int i = 0; i < bytes.size(); i ++) {
+                fileChannel.write(ByteBuffer.wrap(Arrays.copyOfRange(bytes.get(i), 0, bytes.get(i).length - 4)), i * socket_buf);
+                System.out.println(fromByteArray(Arrays.copyOfRange(bytes.get(i), bytes.get(i).length - 4, bytes.get(i).length)));
             }
+            fileChannel.close();
             return true;
         }
         return  false;
@@ -111,20 +111,21 @@ public class NewUDPClient implements BasicConnector {
             file.createNewFile();
         }
         long timeStart = System.currentTimeMillis();
-
+        int numPack = 0;
+        bytes.clear();
         while (true) {
             DatagramPacket incoming = receiveData();
-            String check = new String(incoming.getData());
+            byte[] tempBytes = Arrays.copyOfRange(incoming.getData(), 0, incoming.getLength());
+            String check = new String(tempBytes);
+            //System.out.println("pack: " + fromByteArray(Arrays.copyOfRange(incoming.getData(), incoming.getLength() - 4, incoming.getLength())));
             if(check.trim().equals("ENDFILE")) {
-                afc.close();
+                System.out.println("Ending");
+                send("OK");
                 break;
             }
-            bytes.add(incoming.getData());
-        }
-        for(int i = 0; i < bytes.size(); i ++){
-            afc.write(ByteBuffer.wrap(Arrays.copyOfRange(bytes.get(i), 0, bytes.get(i).length - 4)),
-                    fromByteArray(Arrays.copyOfRange(bytes.get(i),
-                            bytes.get(i).length - 4, bytes.get(i).length)) * socket_buf);
+
+            bytes.add(tempBytes);
+            numPack ++;
         }
     }
     private void sendQuiet(String data) throws IOException {

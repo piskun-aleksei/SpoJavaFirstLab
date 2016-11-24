@@ -83,13 +83,21 @@ public class NewUDPServer implements BasicConnector {
         }
     }
 
+    private String checkWait() throws IOException {
+        try {
+            receiveString();
+            return "Succes";
+        } catch (SocketTimeoutException e) {
+            return "Not";
+        }
+    }
+
     private void download(InetAddress address, int port, String filename) throws IOException {
-        server.setSoTimeout(600);
+        server.setSoTimeout(0);
         File file = new File(filename.trim());
         int result = -2;
-        while(result != 0 || result != 1){
-            result = fileOnServer(address, port, file);
-        }
+        result = fileOnServer(address, port, file);
+        receiveString();
         if(result == 0) return;
         RandomAccessFile fileReader;
         fileReader = new RandomAccessFile(file, "r");
@@ -97,12 +105,13 @@ public class NewUDPServer implements BasicConnector {
         if(fileReader.length() % socket_buf != 0)
             countPackets++;
         result = -2;
-        while(result != 1){
-            result = sendPacketsCount(address, port, countPackets);
-        }
+
+        result = sendPacketsCount(address, port, countPackets);
+
+        receiveString();
 
         int currentPacket = 0;
-
+        server.setSoTimeout(50);
         for (int i = 0; i <countPackets; i++) {
             fileReader.seek(currentPacket * socket_buf);
             byte[] bytes = new byte[socket_buf];
@@ -110,11 +119,14 @@ public class NewUDPServer implements BasicConnector {
             if (countBytes <= 0) break;
             send(address, port, bytes, countBytes, currentPacket);
             currentPacket++;
+            System.out.println("packSent: " + currentPacket);
+            System.out.println(checkWait());
         }
 
-        while(result != 0){
-            result = sendEndingPacket(address, port);
-        }
+        server.setSoTimeout(0);
+        result = sendEndingPacket(address, port);
+
+        receiveString();
 
     }
 
@@ -127,6 +139,7 @@ public class NewUDPServer implements BasicConnector {
 
     private void send(InetAddress address, int port, byte[] data, int count, Integer packetNum) throws IOException {
         byte[] tempBuf = concatArrays(data, toByteArray(packetNum));
+        System.out.println("packetSent: " + fromByteArray(Arrays.copyOfRange(tempBuf, tempBuf.length - 4, tempBuf.length)));
         DatagramPacket dp = new DatagramPacket(tempBuf, count + 4, address, port);
         server.send(dp);
     }
