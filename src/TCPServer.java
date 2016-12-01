@@ -177,7 +177,6 @@ public class TCPServer implements BasicConnector {
             fileReader.seek(uploadedBytes);
             byte[] bytes = new byte[socket_buf];
             int countBytes = fileReader.read(bytes);
-
             urgent++;
             if(urgent == 100){
                 urgent = 0;
