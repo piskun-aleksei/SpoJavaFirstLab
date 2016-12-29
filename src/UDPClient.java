@@ -1,250 +1,122 @@
-import java.io.IOException;
-
-
 import java.io.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
-import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousFileChannel;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
-import java.util.Arrays;
-
-/**
- * Created by Stas on 08.11.16.
- */
-public class UDPClient implements BasicConnector {
-    private DatagramSocket connection;
-    private BufferedReader user = new BufferedReader(new InputStreamReader(System.in));
-    private byte[] buffer;
-    private DatagramPacket incomingPacket;
-    private DatagramPacket sendPacket;
+import java.net.UnknownHostException;
+import java.util.Date;
+import java.util.Random;
 
 
-    @Override
-    public void startup() {
-        while (true) {
-            setupConnection();
-        }
+public class UDPClient extends BasicUDPConnector {
+
+    private BufferedReader user;
+
+    public UDPClient() {
+        super( SENDER_PORT);
+        user = new BufferedReader(new InputStreamReader(System.in));
     }
 
-    private void setupConnection() {
+    public void start() {
         try {
-            System.out.println("Enter UDPServer's IP address: ");
+            System.out.println("Enter IP to upload file to");
             String ip = user.readLine();
-            System.out.println("Enter UDPServer's Port number: ");
-            String portLine = user.readLine();
-            if (portLine.equals("")) {
-                return;
+            if (ip.equals("")) return;
+            InetAddress inetAddress = InetAddress.getByName(ip);
+            Integer port = RECEIVER_PORT;
+            setRemote(inetAddress, port);
+            while (true) {
+                System.out.println("Enter file name:");
+                String filename = readLineFromUser();
+                try {
+                    upload(filename);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
-            Integer port = Integer.parseInt(portLine);
-            connect(ip, port);
-        } catch (IOException | NumberFormatException e) {
-        }
-    }
-
-    private void connect(String ip, Integer port) {
-        try {
-            connection = new DatagramSocket();
-            buffer = new byte[socket_buf];
-            incomingPacket = new DatagramPacket(buffer, buffer.length);
-            InetAddress IPAddress = InetAddress.getByName(ip);
-            sendPacket = new DatagramPacket(buffer, buffer.length, IPAddress, port);
-            send("Got ya!");
-            generateRequests();
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void generateRequests() {
+    private String readLineFromUser() {
         try {
-
-            while (true) {
-                Arrays.fill(buffer, (byte) 0);
-                connection.receive(incomingPacket);
-                String lineFromServer = new String(buffer);
-
-                Arrays.fill(buffer, (byte) 0);
-                if (lineFromServer == null) {
-                    throw new IOException();
-                }
-                System.out.println("Sever: " + lineFromServer.trim());
-                while (true) {
-                    String lineFromUser = user.readLine();
-                    if (processCommand(lineFromUser)) {
-                        break;
-                    }
-                }
-            }
+            return user.readLine();
         } catch (IOException e) {
+            e.printStackTrace();
+            return "";
         }
-        disconnect();
     }
 
-    private boolean processCommand(String line) throws IOException {
-        String[] command = line.split(" ");
-        String result = new String();
-        for (int i = 1; i < command.length; i++)
-            result += command[i] + " ";
-        switch (command[0].toUpperCase()) {
-            case "UPLOAD":
-                return upload(result, line);
-            case "DOWNLOAD":
-                return prepareDownload(result, line);
-            default:
-                send(line);
-        }
-        return true;
-    }
-
-    private boolean upload(String filename, String command) throws IOException {
+    private void upload(String filename) throws IOException {
         File file = new File(filename);
         if (!file.exists()) {
-            System.out.println("No such file on client");
-            return false;
+            System.out.println("No such file");
+            return;
         }
-        send(command);
-        RandomAccessFile fileReader;
-        fileReader = new RandomAccessFile(file, "r");
+        Date startTime = new Date();
+        CustomPacket packet;
+        int retryCount = 0;
         while (true) {
-            connection.receive(incomingPacket);
-            String lineFromServer = new String(buffer);
-            if (lineFromServer == null) throw new IOException();
-            long uploadedBytes = Long.parseLong(lineFromServer);
-            if (uploadedBytes != -1) {
-                fileReader.seek(uploadedBytes);
-                int countBytes = fileReader.read(buffer);
-                if (countBytes > 0) {
-                    send(buffer, countBytes);
-                } else {
-                    send("FileEnding");
-                }
-            } else {
-                break;
-            }
-        }
-        return true;
-    }
-
-    private boolean checkForFile(String command) throws IOException {
-        send(command);
-        connection.receive(incomingPacket);
-        String line = new String(buffer);
-        if (line == null) throw new IOException();
-        System.out.println("Sever: " + line);
-        switch (line.trim()) {
-            case "No file":
-                return false;
-            case "File was found":
-                return true;
-        }
-        return false;
-    }
-
-    private boolean prepareDownload(String filename, String command) throws IOException {
-        String fileName = new String("downloaded_" + filename).trim();
-        File file = new File(fileName);
-        AsynchronousFileChannel fileChannel = AsynchronousFileChannel.open(
-                Paths.get(fileName), StandardOpenOption.READ,
-                StandardOpenOption.WRITE, StandardOpenOption.CREATE);
-        if (file.exists()) {
-            if (!checkForFile(command)) {
-                return false;
-            }
-            download(fileChannel, file, file.length());
-        } else {
-            if (!checkForFile(command)) {
-                return false;
-            }
-            download(fileChannel, file, 0);
-        }
-        return true;
-    }
-
-    private void download(AsynchronousFileChannel afc, File file, long offset) throws IOException {
-        if (!file.exists()) {
-            file.createNewFile();
-        }
-        long timeStart = System.currentTimeMillis();
-        connection.setSoTimeout(1000);
-        while (true) {
+            String fileParams = filename + " " + file.length();
+            send(fileParams);
+            System.out.println("Client: " + fileParams);
             try {
-                send(String.valueOf(offset));
-                connection.receive(incomingPacket);
-                int count = buffer.length;
-                String check = new String(buffer);
-                if (check.startsWith("FileEnding")) {
-                    System.out.println("Sever: File downloaded");
-                    send("FileSaved");
-                    long time = System.currentTimeMillis() - timeStart;
-                    Long speed = offset / time;
-                    System.out.println("Speed: " + speed + " kb/s");
-                    afc.close();
-                    break;
-                }
+                packet = receive( LOW_TIMEOUT);
+                break;
 
-                System.out.println("Sever: offset: " + offset);
-                byte[] tempBuf = new byte[getLastIndex(buffer) + 1];
-                ByteBuffer.wrap(buffer).get(tempBuf, 0, getLastIndex(buffer) + 1);
-                if (tempBuf[getLastIndex(buffer)] == '\00') {
-                    byte[] tempBufZero = new byte[getLastIndex(buffer)];
-                    ByteBuffer.wrap(buffer).get(tempBufZero, 0, getLastIndex(buffer));
-                    afc.write(ByteBuffer.wrap(tempBufZero), offset);
-                } else {
-                    afc.write(ByteBuffer.wrap(tempBuf), offset);
-                }
-                offset += count;
             } catch (SocketTimeoutException e) {
-                offset -= buffer.length;
-                send(String.valueOf(offset));
-                continue;
+                retryCount++;
+                if(retryCount == RETRY_COUNT) {
+                    System.out.println("No response from receiver");
+                    return;
+                }
             }
         }
-        connection.setSoTimeout(0);
-    }
+        while (true) {
+            if (packet.getNumber() ==  IMPORTANT_PACKET) {
+                System.out.println("Server: " + packet.getDataAsString());
+                double speed = (double)(((new Date()).getTime() - startTime.getTime()) * 1000) == 0
+                        ? Double.MAX_VALUE
+                        :(double) (file.length() * 8) / (double)(((new Date()).getTime() - startTime.getTime()) * 1000);
+                System.out.println("Speed: " + speed + " Mbps");
+                return;
+            }
+            long[] packetNumbers = packet.getDataAsLongArray();
+            System.out.print("Server: Lost packets: ");
+            for(int i = 0; i < packetNumbers.length; i++) {
+                System.out.print("{" + packetNumbers[i] + "}");
+                if(i != packetNumbers.length - 1) System.out.print(", ");
+                else System.out.println(";");
+            }
+            RandomAccessFile fileReader = new RandomAccessFile(file, "r");
+            for (long packetNumber : packetNumbers) {
+                fileReader.seek(packetNumber *  BUFFER_SIZE);
+                byte[] bytes = new byte[ BUFFER_SIZE];
+                int countBytes = fileReader.read(bytes);
+                Random rand = new Random();
+                Double number = rand.nextDouble();
+                if(number > 0.2) {
 
-    private void send(String data) throws IOException {
-        data += "\r\n";
-        byte[] b = data.getBytes();
-        sendPacket.setData(b);
-        sendPacket.setLength(b.length);
-        connection.send(sendPacket);
-    }
-
-    private void send(byte[] data, int count) throws IOException {
-        sendPacket.setData(data);
-        sendPacket.setLength(count);
-        connection.send(sendPacket);
-    }
-
-    private void disconnect() {
-        System.out.println(connection.getRemoteSocketAddress() + " disconnected");
-    }
-
-    private int getLastIndex(byte[] bytes) {
-        int pos = 0;
-        for (int i = 0; i < bytes.length; i++) {
-            if (bytes[i] == 0) {
-                for (int j = i; j < bytes.length; j++) {
-                    if (bytes[j] != 0) {
-                        break;
-                    }
-                    if (j == bytes.length - 1) {
-                        pos = i;
-                        break;
-                    }
+                    send(packetNumber, bytes, countBytes);
                 }
-                if (pos != 0) {
+            }
+            fileReader.close();
+            retryCount = 0;
+            while (true) {
+                System.out.println("Client: Last packet was sent");
+                send( IMPORTANT_PACKET, "Last packet was sent");
+                try {
+                    packet = receive( LOW_TIMEOUT);
                     break;
+                } catch (SocketTimeoutException e) {
+                    retryCount++;
+                    if(retryCount == RETRY_COUNT) {
+                        System.out.println("No response from receiver");
+                        return;
+                    }
                 }
             }
-            if (i == bytes.length - 1) {
-                pos = bytes.length - 1;
-            }
         }
-        return pos;
     }
 }

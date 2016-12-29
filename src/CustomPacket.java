@@ -25,6 +25,7 @@ public class CustomPacket {
 
     public byte[] getData() {
         return Arrays.copyOfRange(packet.getData(), Long.BYTES, packet.getLength());
+
     }
 
     public String getDataAsString() {
@@ -57,8 +58,7 @@ public class CustomPacket {
         return packet;
     }
 
-    public static DatagramPacket getPacketForSend(long number, byte[] data, int dataLength,
-                                                  InetAddress address, int port) {
+    public static DatagramPacket getPacketForSend(long number, byte[] data, int dataLength, InetAddress address, int port) {
         return (new CustomPacket(number, data, dataLength, address, port)).packet;
     }
 

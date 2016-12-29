@@ -30,12 +30,12 @@ public class Starter {
                 System.out.println("Choose your destiny: 1 for server, 2 for client ");
                 i = Integer.parseInt(new Scanner(System.in).nextLine());
                 if (i == 1) {
-                    UltimateUDPServer connector = new UltimateUDPServer();
+                    UDPServer connector = new UDPServer();
                     choiceIsCorrect = true;
                     connector.start();
                 }
                 if (i == 2) {
-                    UltimateUDPClient connector = new UltimateUDPClient();
+                    UDPClient connector = new UDPClient();
                     choiceIsCorrect = true;
                     connector.start();
                 }
